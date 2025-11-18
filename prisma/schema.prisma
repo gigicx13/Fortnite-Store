@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  vbucks    Int       @default(10000)
+  createdAt DateTime  @default(now())
+
+  cosmetics UserCosmetic[]
+  purchases Purchase[]
+}
+
+model Cosmetic {
+  id          Int       @id @default(autoincrement())
+  externalId  String    @unique    // ID do item vindo da API externa
+  name        String
+  type        String
+  rarity      String
+  price       Int
+  image       String?
+  isNew       Boolean   @default(false)
+  isInShop    Boolean   @default(false)
+  updatedAt   DateTime  @updatedAt
+
+  users       UserCosmetic[]
+  purchases   Purchase[]
+}
+
+model UserCosmetic {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  cosmeticId  Int
+  acquiredAt  DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  cosmetic    Cosmetic  @relation(fields: [cosmeticId], references: [id])
+
+  @@unique([userId, cosmeticId])
+}
+
+model Purchase {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  cosmeticId  Int
+  price       Int
+  type        String    // "buy" ou "refund"
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+  cosmetic    Cosmetic  @relation(fields: [cosmeticId], references: [id])
+}
