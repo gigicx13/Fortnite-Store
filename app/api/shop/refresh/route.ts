@@ -3,50 +3,56 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    // Busca a loja diária da API externa
-    const response = await fetch("https://fortnite-api.com/v2/shop/br/combined");
-    const data = await response.json();
+    const response = await fetch("https://fortnite-api.com/v2/shop");
+    const json = await response.json();
 
-    if (!data || !data.data) {
-      return NextResponse.json({ error: "Erro ao obter loja externa" }, { status: 500 });
+    const entries = json?.data?.entries;
+
+    if (!Array.isArray(entries)) {
+      return NextResponse.json({
+        error: "Formato inesperado vindo da API externa",
+        debug: json.data
+      }, { status: 500 });
     }
 
-    const shopEntries = [
-      ...(data.data.featured?.entries || []),
-      ...(data.data.daily?.entries || []),
-    ];
-
-    // Limpar loja antiga
+    // Limpa a loja antiga
     await prisma.cosmetic.updateMany({
       data: { isInShop: false }
     });
 
-    let count = 0;
+    let updatedCount = 0;
 
-    for (const entry of shopEntries) {
-      for (const item of entry.items || []) {
-        await prisma.cosmetic.updateMany({
+    // Agora processa entries.brItems
+    for (const entry of entries) {
+      const brItems = entry.brItems ?? [];
+
+      for (const item of brItems) {
+        const updated = await prisma.cosmetic.updateMany({
           where: { externalId: item.id },
           data: {
             isInShop: true,
-            isNew: item.new === true
+            isNew: false,
+            price: entry.finalPrice ?? entry.regularPrice ?? 0,
+            name: item.name,
+            type: item.type?.value,
+            rarity: item.rarity?.value,
+            image: item.images?.icon
           }
         });
 
-        count++;
+        if (updated.count > 0) updatedCount++;
       }
     }
 
     return NextResponse.json({
       message: "Loja atualizada com sucesso!",
-      total: count
+      totalItemsUpdated: updatedCount
     });
 
-  } catch (error) {
-    console.error("Erro ao atualizar loja:", error);
-    return NextResponse.json(
-      { error: "Erro ao atualizar loja" },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    return NextResponse.json({
+      error: "Erro ao sincronizar a loja",
+      details: error.message
+    }, { status: 500 });
   }
 }

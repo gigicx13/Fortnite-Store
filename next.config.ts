@@ -1,7 +1,14 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    legacyBrowsers: false,
+    serverActions: {
+      allowedOrigins: ["*"]
+    },
+    // Isso força o Next a usar o servidor antigo (Webpack)
+    // sem tentar usar o Turbopack
+    useWebpackDevMiddleware: true
+  }
 };
 
-export default nextConfig;
+module.exports = nextConfig;
