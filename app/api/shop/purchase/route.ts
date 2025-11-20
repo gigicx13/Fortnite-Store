@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
 export async function POST(req: Request) {
@@ -7,60 +6,73 @@ export async function POST(req: Request) {
     const { cosmeticId } = await req.json();
 
     if (!cosmeticId) {
-      return new Response(JSON.stringify({ error: "CosmeticId é obrigatório" }), {
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ error: "cosmeticId é obrigatório" }),
+        { status: 400 }
+      );
     }
 
-    // Lê cookies corretamente (Next 14+)
-    const cookieStore = cookies();
-    const token = cookieStore.get("token")?.value;
+    // 🔥 LÊ O TOKEN PELO HEADER (para Thunder Client)
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
 
     if (!token) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401,
-      });
+      return new Response(
+        JSON.stringify({ error: "Token não enviado" }),
+        { status: 401 }
+      );
     }
 
-    // Valida token
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+    // 🔒 VALIDA O TOKEN JWT
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ error: "Token inválido" }),
+        { status: 401 }
+      );
+    }
 
-    // Busca usuário
+    // 🔍 BUSCA O USUÁRIO PELO ID DO TOKEN
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
     });
 
     if (!user) {
-      return new Response(JSON.stringify({ error: "Usuário não encontrado" }), {
-        status: 404,
-      });
+      return new Response(
+        JSON.stringify({ error: "Usuário não encontrado" }),
+        { status: 404 }
+      );
     }
 
-    // Busca item da loja
+    // 🔍 BUSCA O ITEM
     const item = await prisma.cosmetic.findUnique({
       where: { id: cosmeticId },
     });
 
     if (!item || !item.isInShop) {
-      return new Response(JSON.stringify({ error: "Item não está à venda" }), {
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ error: "Item não está à venda" }),
+        { status: 400 }
+      );
     }
 
-    // Verifica saldo
+    // 💰 VERIFICA SALDO
     if (user.vbucks < item.price) {
-      return new Response(JSON.stringify({ error: "Saldo insuficiente" }), {
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ error: "Saldo insuficiente" }),
+        { status: 400 }
+      );
     }
 
-    // Debita V-Bucks
+    // 💸 DEBITA V-BUCKS
     await prisma.user.update({
       where: { id: user.id },
       data: { vbucks: user.vbucks - item.price },
     });
 
-    // Registra compra
+    // 🧾 REGISTRA A COMPRA
     await prisma.purchase.create({
       data: {
         userId: user.id,
@@ -68,14 +80,19 @@ export async function POST(req: Request) {
       },
     });
 
-    return new Response(JSON.stringify({ message: "Compra realizada com sucesso!" }), {
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({ message: "Compra realizada com sucesso!" }),
+      { status: 200 }
+    );
 
-  } catch (err: any) {
-    console.error("Erro ao comprar item:", err);
-    return new Response(JSON.stringify({ error: "Erro interno", details: err.message }), {
-      status: 500,
-    });
+  } catch (error: any) {
+    console.error("Erro ao comprar item:", error);
+    return new Response(
+      JSON.stringify({
+        error: "Erro interno no servidor",
+        details: error.message,
+      }),
+      { status: 500 }
+    );
   }
 }

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
-export async function POST(req: Request) {
+console.log("JWT usado na criação:", process.env.JWT_SECRET);
+export async function POST(req) {
   try {
     const { email, password } = await req.json();
 
@@ -33,8 +35,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // 🔥 GERANDO O TOKEN JWT
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     return NextResponse.json({
       message: "Login realizado com sucesso!",
+      token, // 🔥 agora vem o token
       user: {
         id: user.id,
         name: user.name,
@@ -43,7 +56,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("Erro no login:", error);
     return NextResponse.json(
       { error: "Erro interno no servidor." },
       { status: 500 }
